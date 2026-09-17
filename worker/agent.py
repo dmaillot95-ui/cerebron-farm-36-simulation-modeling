@@ -1,9 +1,11 @@
 import json, os, pathlib, subprocess, hashlib, time
+from registry_loader import load_registry
 
 ROLE=os.getenv('ROLE','UNKNOWN_ROLE')
 MODEL=os.getenv('MODEL','huggingface-projects/llama-3.2-3B-Instruct')
 FOCUS=os.getenv('FOCUS','simulation modeling')
 MISSION=pathlib.Path('MISSION.md').read_text(encoding='utf-8')
+REGISTRY_CONTEXT, REGISTRY_STATE = load_registry(['constitution','disciplines','keys','banks'])
 PREFERRED=['/generate','/chat','/predict','/respond','/infer','/run']
 
 def run(cmd,timeout=240):
@@ -49,15 +51,14 @@ def invoke(space,prompt):
         pred=run(['hf-gradio','predict',space,endpoint,json.dumps(payload,ensure_ascii=False)],240)
         if pred.returncode==0 and pred.stdout.strip():
             text=extract(pred.stdout)
-            if text:
-                return True,text,{'endpoint':endpoint,'sha256':hashlib.sha256(text.encode()).hexdigest()}
+            if text: return True,text,{'endpoint':endpoint,'sha256':hashlib.sha256(text.encode()).hexdigest()}
         errors.append({'endpoint':endpoint,'error':(pred.stderr or pred.stdout)[-1200:]})
     return False,None,{'errors':errors}
 
-prompt=f'''You are {ROLE} in CEREBRON Ω Farm 36 Simulation & Modeling.\nFocus: {FOCUS}.\n\n{MISSION}\n\nReturn a concise auditable report with assumptions, equations/rules, units, parameters, boundary/initial conditions, numerical method, verification checks, calibration-vs-validation separation, sensitivity, uncertainty, extrapolation limits, failure modes, falsification path, and claim ledger.'''
+prompt=f'''You are {ROLE} in CEREBRON Ω Farm 36 Simulation & Modeling.\nFocus: {FOCUS}.\n\n{MISSION}\n\nShared CEREBRON registry context (guidance only; not self-certifying evidence):\n{REGISTRY_CONTEXT}\n\nReturn a concise auditable report with assumptions, equations/rules, units, parameters, boundary/initial conditions, numerical method, verification checks, calibration-vs-validation separation, sensitivity, uncertainty, extrapolation limits, failure modes, falsification path, and claim ledger.'''
 
 ok,text,meta=invoke(MODEL,prompt)
-out={'farm':36,'role':ROLE,'model':MODEL,'focus':FOCUS,'provider':'huggingface-space-zerogpu','inference_success':ok,'status':'UNREVIEWED_EXTERNAL_AGENT_OUTPUT' if ok else 'EXTERNAL_INFERENCE_FAILED','output':text,'meta':meta,'timestamp':int(time.time())}
+out={'farm':36,'role':ROLE,'model':MODEL,'focus':FOCUS,'provider':'huggingface-space-zerogpu','inference_success':ok,'status':'UNREVIEWED_EXTERNAL_AGENT_OUTPUT' if ok else 'EXTERNAL_INFERENCE_FAILED','output':text,'meta':meta,'registry_runtime':REGISTRY_STATE,'timestamp':int(time.time())}
 pathlib.Path('results').mkdir(exist_ok=True)
 pathlib.Path(f'results/{ROLE}.json').write_text(json.dumps(out,ensure_ascii=False,indent=2),encoding='utf-8')
-print(json.dumps({'role':ROLE,'status':out['status'],'inference_success':ok,'meta':meta},ensure_ascii=False))
+print(json.dumps({'role':ROLE,'status':out['status'],'inference_success':ok,'registry_runtime':REGISTRY_STATE},ensure_ascii=False))
