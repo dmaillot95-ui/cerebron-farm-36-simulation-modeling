@@ -1,0 +1,85 @@
+name: CEREBRON Farm 36 Simulation Modeling
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  agents:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - {role: MODEL_ARCHITECT, model: huggingface-projects/llama-3.2-3B-Instruct, focus: model structure state variables interfaces}
+          - {role: GOVERNING_EQUATIONS_AUDITOR, model: huggingface-projects/gemma-2-9b-it, focus: equations conservation laws dimensional consistency}
+          - {role: NUMERICAL_METHODS_SPECIALIST, model: huggingface-projects/llama-3.2-3B-Instruct, focus: discretization convergence stability numerical error}
+          - {role: PARAMETER_PROVENANCE_AUDITOR, model: huggingface-projects/gemma-2-9b-it, focus: parameter sources units ranges uncertainty}
+          - {role: INITIAL_BOUNDARY_CONDITION_AUDITOR, model: huggingface-projects/llama-3.2-3B-Instruct, focus: initial and boundary conditions regime validity}
+          - {role: CALIBRATION_SPECIALIST, model: huggingface-projects/gemma-2-9b-it, focus: calibration identifiability overfitting}
+          - {role: VALIDATION_SPECIALIST, model: huggingface-projects/llama-3.2-3B-Instruct, focus: independent validation and holdout evidence}
+          - {role: SENSITIVITY_ANALYST, model: huggingface-projects/gemma-2-9b-it, focus: local global sensitivity dominant parameters}
+          - {role: UNCERTAINTY_QUANTIFICATION_SPECIALIST, model: huggingface-projects/llama-3.2-3B-Instruct, focus: aleatory epistemic uncertainty propagation}
+          - {role: MONTE_CARLO_SIMULATION_SPECIALIST, model: huggingface-projects/gemma-2-9b-it, focus: sampling convergence distributions tails}
+          - {role: MULTIPHYSICS_COUPLING_AUDITOR, model: huggingface-projects/llama-3.2-3B-Instruct, focus: coupling assumptions interfaces feedback}
+          - {role: SYSTEM_DYNAMICS_MODELER, model: huggingface-projects/gemma-2-9b-it, focus: stocks flows feedback delays nonlinear dynamics}
+          - {role: AGENT_BASED_MODEL_AUDITOR, model: huggingface-projects/llama-3.2-3B-Instruct, focus: rules emergence calibration validation}
+          - {role: SURROGATE_REDUCED_ORDER_MODEL_SPECIALIST, model: huggingface-projects/gemma-2-9b-it, focus: surrogate error reduced order transfer limits}
+          - {role: EXTREME_FAILURE_SCENARIO_MODELER, model: huggingface-projects/llama-3.2-3B-Instruct, focus: degraded extreme failure regimes}
+          - {role: MODEL_VERIFICATION_AUDITOR, model: huggingface-projects/gemma-2-9b-it, focus: code verification conservation invariants convergence}
+          - {role: MODEL_MISSPECIFICATION_RED_TEAM, model: huggingface-projects/llama-3.2-3B-Instruct, focus: hidden assumptions omitted variables wrong regime}
+          - {role: SIMULATION_TO_TEST_TRANSLATOR, model: huggingface-projects/gemma-2-9b-it, focus: minimum physical tests needed to validate claims}
+          - {role: INDEPENDENT_MODEL_REPLICATOR, model: huggingface-projects/llama-3.2-3B-Instruct, focus: independent reproduction and disagreement analysis}
+          - {role: OMEGA_SIMULATION_MODELING_JUDGE, model: huggingface-projects/gemma-2-9b-it, focus: evidence bounded synthesis unresolved unknowns}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -q hf-gradio
+      - name: Run external AI role
+        continue-on-error: true
+        env:
+          ROLE: ${{ matrix.role }}
+          MODEL: ${{ matrix.model }}
+          FOCUS: ${{ matrix.focus }}
+        run: python worker/agent.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: farm36-${{ matrix.role }}
+          path: results/${{ matrix.role }}.json
+
+  omega:
+    if: always()
+    needs: agents
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: farm36-*
+          path: collected
+          merge-multiple: true
+      - name: Build Omega packet
+        run: |
+          python - <<'PY'
+          import json, glob, os
+          rows=[]
+          for p in glob.glob('collected/*.json'):
+              try: rows.append(json.load(open(p,encoding='utf-8')))
+              except Exception as e: rows.append({'file':p,'status':'ARTIFACT_PARSE_FAILED','error':repr(e)})
+          ok=[r for r in rows if r.get('inference_success') is True and r.get('status')=='UNREVIEWED_EXTERNAL_AGENT_OUTPUT']
+          packet={'farm':36,'name':'Simulation Modeling','roles_expected':20,'roles_returned':len(rows),'successful_external_ai_calls':len(ok),'failed_external_ai_calls':len(rows)-len(ok),'epistemic_status':'UNREVIEWED_EXTERNAL_AGENT_OUTPUT','rules':['MODEL!=REALITY','SIMULATION!=TEST','FIT!=VALIDATION','CLAIM<=EVIDENCE','VERIFY BEFORE COMMIT'],'results':rows}
+          os.makedirs('omega',exist_ok=True)
+          json.dump(packet,open('omega/farm36-omega.json','w',encoding='utf-8'),ensure_ascii=False,indent=2)
+          print(json.dumps({k:v for k,v in packet.items() if k!='results'},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: simulation-modeling-farm-36-omega-packet
+          path: omega/farm36-omega.json
